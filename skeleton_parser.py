@@ -143,15 +143,18 @@ def parseJson(json_file, userSet):
             fp1.write('\n')
 
             sellerID = sellerObject.get("UserID")
-            if(sellerID not in userSet):
-                userSet.add(sellerID)
+        
                    #user id also, USer ID, Location, Country, Rating
-                SellerData = (sellerID + columnSeparator + location + columnSeparator 
+            SellerData = (sellerID + columnSeparator + location.replace("\"", "\\\"") + columnSeparator 
                     + country + columnSeparator + sellerObject.get("Rating"))
+                
+               
+         
+            if(sellerID not in userSet):
                 fp2.write(SellerData)
                 fp2.write('\n')
-                users += 1
-         
+                print(len(userSet))
+                userSet.add(sellerID)
 
             
 
@@ -198,17 +201,19 @@ def parseJson(json_file, userSet):
                     fp3.write(bid_info)
                     fp3.write('\n') #Record the bid 
 
-                    #Add bidder ID 
-                    if(bidderID not in userSet):
-                        userSet.add(bidderID)
-
                         #Record the bidder in user table
-                        BidderData = (bidderID + columnSeparator + bidderLoc + 
+                    BidderData = (bidderID + columnSeparator + bidderLoc.replace("\"", "\\\"") + 
                                 columnSeparator + bidderCountry + columnSeparator 
                                     + bidder.get("Rating") )
+
+                     #Add 
+                    if(bidderID not in userSet):
                         fp2.write(BidderData)
                         fp2.write('\n')
-                        users += 1
+                        print(len(userSet))
+                        userSet.add(bidderID)
+                        
+                        
 
 
 
@@ -219,8 +224,8 @@ def parseJson(json_file, userSet):
                     fp4.write(id + columnSeparator + catStr)
                     fp4.write('\n')
         
-            
-    print(len(userSet))
+   # print("Number of users in library till yet ") 
+    #print(len(userSet))
 """
 Loops through each json files provided on the command line and passes each file
 to the parser
@@ -230,6 +235,9 @@ def main(argv):
         print >> sys.stderr, 'Usage: python skeleton_json_parser.py <path to json files>'
         sys.exit(1)
     # loops over all .json files in the argument
+
+
+
     userSet = set()
     for f in argv[1:]:
         if isJson(f):
