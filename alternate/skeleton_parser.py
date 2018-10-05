@@ -149,12 +149,17 @@ def parseJson(json_file, userSet, catSet):
 
             if(sellerID not in userSet):
                 userSet[sellerID] = [location, country, rating]
+            else:
+                #if location is null
+                if(userSet[sellerID][0] == '\"NULL\"'):
+                    userSet[sellerID][0] = location
+                if(userSet[sellerID][1] == '\"NULL\"'):
+                    userSet[sellerID][1] = country
             
             fp2.write(sellerID + columnSeparator + itemID + '\n')
 
 
             #Add data from bids to bidder table
-
             if bids is not None:
 
                 for bid in bids:
@@ -183,6 +188,11 @@ def parseJson(json_file, userSet, catSet):
 
                     if(bidderID not in userSet):
                         userSet[bidderID] = [bidderLoc, bidderCountry, bidder.get("Rating")]
+                    else:
+                        if(userSet[bidderID][0] == '\"NULL\"' and bidderLoc != '\"NULL\"' ):
+                            userSet[bidderID][0] = bidderLoc
+                        if(userSet[bidderID][1] == '\"NULL\"' and bidderCountry != '\"NULL\"' ):
+                            userSet[bidderID][1] = bidderCountry
 
 
             #Write the categories to the schema
@@ -232,7 +242,7 @@ def main(argv):
         if isJson(f):
             parseJson(f, userSet, catSet)
             print "Success parsing " + f
-    print(len(userSet))
+    
 
     fp = open("UserInfo.dat", "w+")
     count = 0
@@ -246,25 +256,25 @@ def main(argv):
         userData = (userID + columnSeparator + location + columnSeparator + country + columnSeparator + rating)
         fp.write(userData + '\n')
 
-    print("# of sellers: ")
-    print(count)
+ 
 
     fp.close()
     fp2 = open("Categories.dat", "w+")
-    categories = set()
+    catmap = set()
 
     fp3 = open("Category.dat", "w+")
     for k,v in catSet.items():
     	id = k
     	for category in v:
+            catStr = id + columnSeparator + category
+            fp2.write(catStr + '\n')
 
-            if(category not in categories):
-                categories.add(category)
+            if(category not in catmap):
+                catmap.add(category)
                 fp3.write(category + '\n')
 
-    		catStr = id + columnSeparator + category
-    		fp2.write(catStr + '\n')
-
+    		
+    fp3.close()
     fp2.close()
 
 
