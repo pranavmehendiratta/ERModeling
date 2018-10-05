@@ -81,12 +81,9 @@ def parseJson(json_file, userSet, catSet):
     users = 0
     #For every json file, open in append mode
     fp1 = open("AuctionItems.dat", "a+")
-    
+    fp2 = open("Sells.dat", "a+")
     fp3 = open("BidsInfo.dat", "a+")
 
-
-    #GLOBAL dictionary of user IDs
-    #userSet = set() 
 
     with open(json_file, 'r') as f:
         items = loads(f.read())['Items'] # creates a Python dictionary of Items for the supplied json file
@@ -106,7 +103,7 @@ def parseJson(json_file, userSet, catSet):
             categories = item.get("Category")
             processCategories(catSet, categories, itemID)
 
-            currently = item.get("Currently")
+            currently = transformDollar(item.get("Currently"))
             buy_price = item.get("Buy_Price")
 
             if(buy_price is None):
@@ -114,7 +111,7 @@ def parseJson(json_file, userSet, catSet):
             else:
             	buy_price = transformDollar(buy_price)
 
-            first_bid = item.get("First_Bid")
+            first_bid = transformDollar(item.get("First_Bid"))
             numBids = item.get("Number_of_Bids")
             bids = item.get("Bids")
 
@@ -133,46 +130,36 @@ def parseJson(json_file, userSet, catSet):
             # Removing quotes from the description to make it sqlite compatible
             if(description is None):
                 description = '\"NULL\"'
-                
-            #print("type: ")
-            #print(type(itemID))
-            #if (itemID == "1046871451"):
-            #	print(json.dumps(item))
+            else:
+                description = description.replace("\"", "\\\"")
 
-            newStr = (itemID + columnSeparator + name.replace("\"", "\\\"") + columnSeparator + transformDollar(currently) + columnSeparator +
-                    sellerID + columnSeparator +  buy_price
-                    + columnSeparator  + transformDollar(first_bid) + columnSeparator + 
-                    item.get("Number_of_Bids") + columnSeparator + transformDttm(started)
-                     + columnSeparator + transformDttm(ends) + columnSeparator + description.replace("\"", "\\\""))
-
-            #newStr = name.replace("\"", "\\\"")
-
-            if(location is None):
-            	location = '\"NULL\"'
-            #else:
-            #	location = location.replace("\"", "\\\"")
-
-            if(country is None):
-            	country = '\"NULL\"'
-            #else:
-            #	country = country.replace("\"", "\\\"")
+            newStr = (itemID + columnSeparator + 
+                      name + columnSeparator +
+                      currently + columnSeparator +
+                      sellerID + columnSeparator +  
+                      buy_price + columnSeparator  + 
+                      first_bid + columnSeparator + 
+                      numBids + columnSeparator + 
+                      started + columnSeparator + 
+                      ends + columnSeparator + 
+                      description)
 
             #Record the auction item and the seller info
-            fp1.write(newStr)
-            fp1.write('\n')
-
+            fp1.write(newStr + '\n')
 
             if(sellerID not in userSet):
                 userSet[sellerID] = [location, country, rating]
             else:
-            	if(userSet[sellerID][0] == '\"NULL\"' and location != '\"NULL\"'):
-            		userSet[sellerID][0] = location
-                if(userSet[sellerID][1] == '\"NULL\"' and country != '\"NULL\"'):
+                #if location is null
+                if(userSet[sellerID][0] == '\"NULL\"'):
+                    userSet[sellerID][0] = location
+                if(userSet[sellerID][1] == '\"NULL\"'):
                     userSet[sellerID][1] = country
             
+            fp2.write(sellerID + columnSeparator + itemID + '\n')
+
 
             #Add data from bids to bidder table
-
             if bids is not None:
 
                 for bid in bids:
@@ -184,9 +171,13 @@ def parseJson(json_file, userSet, catSet):
 
                     if(bidderLoc is None):
                         bidderLoc = '\"NULL\"'
+                    else:
+                        bidderLoc = bidderLoc.replace("\"", "\\\"")
 
                     if(bidderCountry is None):
                         bidderCountry = '\"NULL\"'
+                    else:
+                        bidderCountry = bidderCountry.replace("\"", "\\\"")
 
                     #item ID, user ID
                     bid_info = (itemID + columnSeparator + bidderID + columnSeparator
@@ -198,12 +189,15 @@ def parseJson(json_file, userSet, catSet):
                     if(bidderID not in userSet):
                         userSet[bidderID] = [bidderLoc, bidderCountry, bidder.get("Rating")]
                     else:
-                    	if(userSet[bidderID][0] == '\"NULL\"' and bidderLoc != '\"NULL\"' ):
-                    		userSet[bidderID][0] = bidderLoc
+                        if(userSet[bidderID][0] == '\"NULL\"' and bidderLoc != '\"NULL\"' ):
+                            userSet[bidderID][0] = bidderLoc
                         if(userSet[bidderID][1] == '\"NULL\"' and bidderCountry != '\"NULL\"' ):
                             userSet[bidderID][1] = bidderCountry
 
-            #Write the categories to the schema
+
+    fp1.close()
+    fp2.close()
+    fp3.close()        #Write the categories to the schema
 
 def processCategories(catSet, categories, itemID):
 	if categories != None:
@@ -237,37 +231,52 @@ def main(argv):
     if (os.path.isfile("Categories.dat")):
     	os.remove("Categories.dat")
 
+    if (os.path.isfile("Category.dat")):
+        os.remove("Category.dat")
+
+    if (os.path.isfile("Sells.dat")):
+        os.remove("Sells.dat")
+
+
     userSet = dict()
     catSet = dict()
     for f in argv[1:]:
         if isJson(f):
             parseJson(f, userSet, catSet)
             print "Success parsing " + f
-    print(len(userSet))
+    
 
     fp = open("UserInfo.dat", "w+")
     count = 0
     for k,v in userSet.items():
-    	sellerID = k
-    	location = v[0]
-    	country = v[1]
+    	userID = k
+    	location = v[0].replace("\"", "\\\"")
+    	country = v[1].replace("\"", "\\\"")
     	rating = v[2]
-        if (location is not None and country is not None and int(rating, 10) > 1000):
+        if (location != "NULL" and int(rating, 10) > 1000):
             count += 1
-        SellerData = (sellerID + columnSeparator + location + columnSeparator + country + columnSeparator + rating)
-        fp.write(SellerData + '\n')
+        userData = (userID + columnSeparator + location + columnSeparator + country + columnSeparator + rating)
+        fp.write(userData + '\n')
 
-    print("# of sellers: ")
-    print(count)
+ 
 
     fp.close()
     fp2 = open("Categories.dat", "w+")
+    catmap = set()
+
+    fp3 = open("Category.dat", "w+")
     for k,v in catSet.items():
     	id = k
     	for category in v:
-    		catStr = id + columnSeparator + category
-    		fp2.write(catStr + '\n')
+            catStr = id + columnSeparator + category
+            fp2.write(catStr + '\n')
 
+            if(category not in catmap):
+                catmap.add(category)
+                fp3.write(category + '\n')
+
+    		
+    fp3.close()
     fp2.close()
 
 
