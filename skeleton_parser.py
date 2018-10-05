@@ -26,7 +26,9 @@ Happy parsing!
 
 import sys
 from json import loads
+import os
 from re import sub
+import json
 
 columnSeparator = "|"
 
@@ -68,14 +70,6 @@ def transformDollar(money):
         return money
     return sub(r'[^\d.]', '', money)
 
-"""
-Create an item entry and fill in item.dat
-"""
-
-
-
-
-
 
 """
 Parses a single json file. Currently, there's a loop that iterates over each
@@ -86,10 +80,10 @@ of the necessary SQL tables for your database.
 def parseJson(json_file, userSet, catSet):
     users = 0
     #For every json file, open in append mode
-    fp1 = open("AuctionItem.dat", "a+")
+    fp1 = open("AuctionItems.dat", "a+")
     
     fp3 = open("BidsInfo.dat", "a+")
-    fp4 = open("Categories.dat", "a+")
+
 
     #GLOBAL dictionary of user IDs
     #userSet = set() 
@@ -105,36 +99,48 @@ def parseJson(json_file, userSet, catSet):
 				
             """
             #get all the parameters
-            id = item.get("ItemID")
-            name = item.get("Name")
+            itemID = item.get("ItemID")
+            name = item.get("Name").replace("\"", "\\\"")
+            
+            # Proce
             categories = item.get("Category")
-            buy = item.get("Buy_Price")
+            processCategories(catSet, categories, itemID)
+
+            currently = item.get("Currently")
+            buy_price = item.get("Buy_Price")
+
+            if(buy_price is None):
+                buy_price = '\"NULL\"'
+            else:
+            	buy_price = transformDollar(buy_price)
+
             first_bid = item.get("First_Bid")
             numBids = item.get("Number_of_Bids")
-            curr = item.get("Currently")
-            
-            location = item.get("Location").replace("\"", "\\\"")
+            bids = item.get("Bids")
+
+            location = item.get("Location")
             country = item.get("Country")
             started = transformDttm(item.get("Started"))
             ends = transformDttm(item.get("Ends"))
 
             sellerObject = item.get("Seller")
-            sellerID = sellerObject.get("UserID")
-            rating = sellerObject.get("Rating")
             description = item.get("Description")
 
-            #get the item information and add it to.dat
-       
-            #+ buy + columnSeparator + first_bid + columnSeparator + started + columnSeparator)
-            if(buy is None):
-                buy = '\"NULL\"'
+            # Getting the seller information
+            sellerID = sellerObject.get("UserID")
+            rating = sellerObject.get("Rating")
 
+            # Removing quotes from the description to make it sqlite compatible
             if(description is None):
                 description = '\"NULL\"'
                 
+            #print("type: ")
+            #print(type(itemID))
+            #if (itemID == "1046871451"):
+            #	print(json.dumps(item))
 
-            newStr = (id + columnSeparator + name.replace("\"", "\\\"") + columnSeparator + curr + columnSeparator +
-                    sellerID + columnSeparator + transformDollar(buy) 
+            newStr = (itemID + columnSeparator + name.replace("\"", "\\\"") + columnSeparator + transformDollar(currently) + columnSeparator +
+                    sellerID + columnSeparator +  buy_price
                     + columnSeparator  + transformDollar(first_bid) + columnSeparator + 
                     item.get("Number_of_Bids") + columnSeparator + transformDttm(started)
                      + columnSeparator + transformDttm(ends) + columnSeparator + description.replace("\"", "\\\""))
@@ -143,9 +149,13 @@ def parseJson(json_file, userSet, catSet):
 
             if(location is None):
             	location = '\"NULL\"'
+            #else:
+            #	location = location.replace("\"", "\\\"")
 
             if(country is None):
             	country = '\"NULL\"'
+            #else:
+            #	country = country.replace("\"", "\\\"")
 
             #Record the auction item and the seller info
             fp1.write(newStr)
@@ -155,22 +165,19 @@ def parseJson(json_file, userSet, catSet):
             if(sellerID not in userSet):
                 userSet[sellerID] = [location, country, rating]
             else:
-            	if(userSet[sellerID][0] == 'NULL' and location is not None):
+            	if(userSet[sellerID][0] == '\"NULL\"' and location != '\"NULL\"'):
             		userSet[sellerID][0] = location
-           
-
+                if(userSet[sellerID][1] == '\"NULL\"' and country != '\"NULL\"'):
+                    userSet[sellerID][1] = country
             
 
             #Add data from bids to bidder table
-            bids = item.get("Bids")
 
-            if bids != None:
+            if bids is not None:
+
                 for bid in bids:
 
-
-
                     bidder = bid.get("Bid").get("Bidder")
-
                     bidderID = bidder.get("UserID")
                     bidderLoc = bidder.get("Location")
                     bidderCountry = bidder.get("Country")
@@ -182,40 +189,30 @@ def parseJson(json_file, userSet, catSet):
                         bidderCountry = '\"NULL\"'
 
                     #item ID, user ID
-                    bid_info = (id + columnSeparator + bidderID + columnSeparator
+                    bid_info = (itemID + columnSeparator + bidderID + columnSeparator
                                     + transformDollar(bid.get("Bid").get("Amount")) + 
                                     columnSeparator + transformDttm(bid.get("Bid").get("Time")) )
 
-                    fp3.write(bid_info)
-                    fp3.write('\n') #Record the bid 
-
-                    #Record the bidder in user table
-                    BidderData = (bidderID + columnSeparator + bidderLoc.replace("\"", "\\\"") + 
-                                columnSeparator + bidderCountry + columnSeparator 
-                                    + bidder.get("Rating") )
-
-                    
-       
+                    fp3.write(bid_info + '\n')
 
                     if(bidderID not in userSet):
                         userSet[bidderID] = [bidderLoc, bidderCountry, bidder.get("Rating")]
                     else:
-                    	if(userSet[bidderID][0] == 'NULL' and bidderLoc is not None):
+                    	if(userSet[bidderID][0] == '\"NULL\"' and bidderLoc != '\"NULL\"' ):
                     		userSet[bidderID][0] = bidderLoc
-                        
+                        if(userSet[bidderID][1] == '\"NULL\"' and bidderCountry != '\"NULL\"' ):
+                            userSet[bidderID][1] = bidderCountry
 
             #Write the categories to the schema
-            categories = item.get("Category")
-            if categories != None:
-                for catStr in categories:
-                	if(id not in catSet):
-                		catSet[id] = [catStr]
-                	else:
-                	  	#Add the category if not present in there
-                	  	if(catStr not in catSet[id]):
-                	  		catSet[id].append(catStr)
 
-
+def processCategories(catSet, categories, itemID):
+	if categories != None:
+		for catStr in categories:
+			if(itemID not in catSet):
+				catSet[itemID] = [catStr]
+			else:
+				if(catStr not in catSet[itemID]):
+					catSet[itemID].append(catStr)
 
 
 """
@@ -228,7 +225,17 @@ def main(argv):
         sys.exit(1)
     # loops over all .json files in the argument
 
+	if (os.path.isfile("AuctionItems.dat")):
+		os.remove("AuctionItems.dat")
 
+    if (os.path.isfile("UserInfo.dat")):
+    	os.remove("UserInfo.dat")
+
+    if (os.path.isfile("BidsInfo.dat")):
+    	os.remove("BidsInfo.dat")
+
+    if (os.path.isfile("Categories.dat")):
+    	os.remove("Categories.dat")
 
     userSet = dict()
     catSet = dict()
@@ -239,13 +246,19 @@ def main(argv):
     print(len(userSet))
 
     fp = open("UserInfo.dat", "w+")
+    count = 0
     for k,v in userSet.items():
     	sellerID = k
     	location = v[0]
     	country = v[1]
     	rating = v[2]
+        if (location is not None and country is not None and int(rating, 10) > 1000):
+            count += 1
         SellerData = (sellerID + columnSeparator + location + columnSeparator + country + columnSeparator + rating)
         fp.write(SellerData + '\n')
+
+    print("# of sellers: ")
+    print(count)
 
     fp.close()
     fp2 = open("Categories.dat", "w+")
