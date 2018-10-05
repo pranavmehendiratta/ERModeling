@@ -195,7 +195,9 @@ def parseJson(json_file, userSet, catSet):
                             userSet[bidderID][1] = bidderCountry
 
 
-            #Write the categories to the schema
+    fp1.close()
+    fp2.close()
+    fp3.close()        #Write the categories to the schema
 
 def processCategories(catSet, categories, itemID):
 	if categories != None:
